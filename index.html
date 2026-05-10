@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube 自动生成视频字幕</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .serif { font-family: 'Noto Serif SC', serif; }
+        .prose h1 { @apply text-4xl font-bold mb-10 border-b-8 border-black pb-4 text-center text-gray-900; }
+        .prose h2 { @apply text-2xl font-bold mt-12 mb-6 border-l-4 border-blue-600 pl-4 bg-gray-50 py-2 text-gray-800; }
+        .prose p { @apply text-lg leading-loose mb-6 text-gray-700 text-justify; }
+        .prose blockquote { @apply border-y-2 border-gray-100 py-8 my-10 italic text-xl text-gray-500 text-center px-4; }
+        .cursor-blink { display: inline-block; width: 3px; height: 1.2em; @apply bg-blue-500 ml-1; animation: blink 1s infinite; vertical-align: middle; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body class="bg-zinc-50 min-h-screen p-4 md:p-16">
+    <div class="max-w-4xl mx-auto">
+        <div id="setup-panel" class="bg-white p-8 rounded-xl shadow-sm border mb-12">
+            <h2 class="text-2xl font-bold mb-6">全自动视频重构</h2>
+            <div class="space-y-4">
+                <input type="password" id="apiKey" placeholder="Gemini API Key" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
+                <input type="text" id="url" placeholder="YouTube URL" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
+                <button onclick="start()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition active:scale-95">开始生成</button>
+            </div>
+        </div>
+
+        <article id="output-wrapper" class="hidden bg-white p-10 md:p-20 shadow-xl rounded-sm">
+            <div id="content" class="prose serif max-w-none"></div>
+            <div id="loader" class="mt-10 text-blue-600 font-medium border-t pt-8">
+                <span class="cursor-blink"></span> <span id="status">正在同步字幕数据...</span>
+            </div>
+        </article>
+    </div>
+
+    <script>
+        async function start() {
+            const apiKey = document.getElementById('apiKey').value;
+            const url = document.getElementById('url').value;
+            const content = document.getElementById('content');
+            const setup = document.getElementById('setup-panel');
+            const wrapper = document.getElementById('output-wrapper');
+            const status = document.getElementById('status');
+
+            if (!apiKey || !url) return alert('请填写完整信息');
+
+            setup.style.display = 'none';
+            wrapper.classList.remove('hidden');
+            content.innerHTML = '';
+
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey, url })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = ""; // 缓冲区
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // 按 SSE 规范的双换行符分割
+                let parts = buffer.split('\n\n');
+                buffer = parts.pop(); // 最后一个可能是不完整的，留给下一轮
+
+                for (let part of parts) {
+                    if (part.startsWith('data: ')) {
+                        const dataString = part.replace('data: ', '').trim();
+                        // 1. 明确处理结束信号
+                        if (dataString === '[DONE]') {
+                            document.getElementById('loader').classList.add('hidden');
+                            return;
+                        }
+                        
+                        try {
+                            const json = JSON.parse(dataString);
+                            if (json.text) {
+                                // 逐字追加到页面上，实现流式效果
+                                document.getElementById('content').innerHTML += json.text;
+
+                                // 自动滚动到最下方
+                                // window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        } catch (e) {
+                            // 如果解析失败，说明这个数据包还没传完，塞回 buffer
+                            console.error("JSON 解析失败:", e, "数据内容:", dataString);
+                            buffer = part + '\n\n' + buffer;
+                        }
+                    }
+                }
+            }
+            document.getElementById('loader').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
