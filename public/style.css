@@ -1,0 +1,50 @@
+.serif { font-family: 'Noto Serif SC', serif; }
+
+/* 强制指定样式，确保优先级高于 Tailwind Reset */
+.prose h1 { 
+    display: block;
+    font-size: 2.25rem !important; /* 4xl */
+    line-height: 2.5rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 2.5rem !important;
+    border-bottom: 8px solid black;
+    padding-bottom: 1rem;
+    text-align: center;
+    color: #111827;
+}
+
+.prose h2 { 
+    display: block;
+    font-size: 1.5rem !important; /* 2xl */
+    line-height: 2rem !important;
+    font-weight: 700 !important;
+    margin-top: 3rem !important;
+    margin-bottom: 1.5rem !important;
+    border-left: 4px solid #2563eb;
+    padding-left: 1rem;
+    background-color: #f9fafb;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    color: #1f2937;
+}
+
+.prose h3 {
+    display: block;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    margin-top: 1.5rem !important;
+    color: #374151;
+}
+
+.prose p { 
+    font-size: 1.125rem !important;
+    line-height: 2 !important;
+    margin-bottom: 1.5rem !important;
+    text-align: justify;
+    color: #374151;
+}
+
+.prose strong {
+    font-weight: bold;
+    color: #000;
+}

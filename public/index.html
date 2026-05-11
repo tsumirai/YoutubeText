@@ -2,185 +2,41 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>YouTube 自动生成视频总结</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 视频深度总结</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        .serif { font-family: 'Noto Serif SC', serif; }
-        
-        /* 强制指定样式，确保优先级高于 Tailwind Reset */
-        .prose h1 { 
-            display: block;
-            font-size: 2.25rem !important; /* 4xl */
-            line-height: 2.5rem !important;
-            font-weight: 700 !important;
-            margin-bottom: 2.5rem !important;
-            border-bottom: 8px solid black;
-            padding-bottom: 1rem;
-            text-align: center;
-            color: #111827;
-        }
-        
-        .prose h2 { 
-            display: block;
-            font-size: 1.5rem !important; /* 2xl */
-            line-height: 2rem !important;
-            font-weight: 700 !important;
-            margin-top: 3rem !important;
-            margin-bottom: 1.5rem !important;
-            border-left: 4px solid #2563eb;
-            padding-left: 1rem;
-            background-color: #f9fafb;
-            padding-top: 0.5rem;
-            padding-bottom: 0.5rem;
-            color: #1f2937;
-        }
-
-        .prose h3 {
-            display: block;
-            font-size: 1.25rem !important;
-            font-weight: 600 !important;
-            margin-top: 1.5rem !important;
-            color: #374151;
-        }
-
-        .prose p { 
-            font-size: 1.125rem !important;
-            line-height: 2 !important;
-            margin-bottom: 1.5rem !important;
-            text-align: justify;
-            color: #374151;
-        }
-
-        .prose strong {
-            font-weight: bold;
-            color: #000;
-        }
-    </style>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="app.js" defer></script>
 </head>
 <body class="bg-zinc-50 min-h-screen p-4 md:p-16">
-    <div class="max-w-4xl mx-auto flex flex-col gap-8">
+    <main class="max-w-4xl mx-auto flex flex-col gap-8">
         
         <article id="output-wrapper" class="hidden bg-white p-10 md:p-20 shadow-xl rounded-sm order-1">
             <div id="content" class="prose serif max-w-none"></div>
             <div id="loader" class="mt-10 text-blue-600 font-medium border-t pt-8">
-                <span class="cursor-blink"></span> <span id="status">正在同步字幕数据...</span>
+                <span class="cursor-blink"></span> 
+                <span id="status">正在同步数据...</span>
             </div>
         </article>
 
-        <div id="setup-panel" class="bg-white p-8 rounded-xl shadow-sm border order-2">
-            <h2 id="setup-title" class="text-2xl font-bold mb-6">自动生成视频总结</h2>
+        <section id="setup-panel" class="bg-white p-8 rounded-xl shadow-sm border order-2">
+            <h2 id="setup-title" class="text-2xl font-bold mb-6 text-gray-800">自动视频内容总结</h2>
             <div class="space-y-4">
-                <input type="password" id="apiKey" placeholder="Gemini API Key" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
-                <input type="text" id="url" placeholder="YouTube URL" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
-                <button id="start-btn" onclick="start()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition active:scale-95">开始生成</button>
+                <input type="password" id="apiKey" placeholder="Gemini API Key" 
+                    class="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                <input type="text" id="url" placeholder="YouTube URL" 
+                    class="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                <button id="start-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition active:scale-95 shadow-lg shadow-blue-100">
+                    开始生成
+                </button>
             </div>
-        </div>
+        </section>
         
-    </div>
-
-    <script>
-        async function start() {
-            const apiKey = document.getElementById('apiKey').value;
-            const urlInput = document.getElementById('url');
-            const url = urlInput.value;
-            const content = document.getElementById('content');
-            const wrapper = document.getElementById('output-wrapper');
-            const status = document.getElementById('status');
-            const startBtn = document.getElementById('start-btn');
-            const setupTitle = document.getElementById('setup-title');
-            const loader = document.getElementById('loader');
-
-            if (!apiKey || !url) return alert('请填写完整信息');
-
-            // --- 状态初始化 ---
-            startBtn.disabled = true;
-            startBtn.innerText = '正在处理中...';
-            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            
-            status.innerText = '正在同步字幕数据...';
-            status.classList.remove('text-red-600');
-            loader.classList.remove('hidden');
-            wrapper.classList.remove('hidden');
-            // 如果是第二次生成，清空旧内容，保留 key 但可以清空 url 方便输入新的
-            content.innerHTML = ''; 
-
-            try {
-                const response = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey, url })
-                });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = "";
-                let fullRawText = "";
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    buffer += decoder.decode(value, { stream: true });
-                    let parts = buffer.split('\n\n');
-                    buffer = parts.pop();
-
-                    for (let part of parts) {
-                        if (part.startsWith('data: ')) {
-                            const dataString = part.replace('data: ', '').trim();
-                            
-                            if (dataString === '[DONE]') {
-                                loader.classList.add('hidden');
-                                finishState(); // 成功结束
-                                return;
-                            }
-                            
-                            try {
-                                const json = JSON.parse(dataString);
-                                if (json.text) {
-                                    fullRawText += json.text;
-                                    // 使用你之前调试好的清洗逻辑和渲染逻辑
-                                    let cleanMarkdown = fullRawText
-                                        .replace(/^好的[，,。]*/, '')
-                                        .replace(/^(以下是|这是).*?[:：]\n*/, '')
-                                        .trimStart();
-                                    content.innerHTML = marked.parse(cleanMarkdown);
-                                } 
-                                else if (json.error) {
-                                    showError(json.error);
-                                    return;
-                                }
-                            } catch (e) {
-                                buffer = part + '\n\n' + buffer;
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                showError("网络连接失败或服务器异常");
-            }
-
-            // --- 辅助功能函数 ---
-
-            function finishState() {
-                startBtn.disabled = false;
-                startBtn.innerText = '生成另一个视频'; // 修改按钮文字
-                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                setupTitle.innerText = '继续重构新视频';
-                urlInput.value = ''; // 正常结束后清空 URL 框，方便输入下一个
-                urlInput.focus();
-            }
-
-            function showError(msg) {
-                status.innerText = `错误: ${msg}`;
-                status.classList.add('text-red-600');
-                startBtn.disabled = false;
-                startBtn.innerText = '重新生成'; // 报错时文字改为重新生成
-                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                document.querySelector('.cursor-blink').style.display = 'none';
-            }
-        }
-    </script>
+    </main>
 </body>
 </html>
