@@ -1,6 +1,6 @@
 ﻿# YouTube 视频字幕 AI 重写工具
 
-这是一个部署在 Cloudflare Pages 上的项目，能够自动获取 YouTube 视频字幕，结合 Google Gemini AI 将字幕内容整理为结构化的 HTML 文章，并以流式方式输出到 Web 页面。
+这是一个部署在 Cloudflare Pages 上的项目，能够自动获取 YouTube 视频字幕，结合 Google Gemini AI 将字幕内容整理为结构化的 MARKDOWN 文章，并以流式方式输出到 Web 页面。
 
 ## 功能特性
 - 自动获取 YouTube 视频的字幕（无需手动下载）
