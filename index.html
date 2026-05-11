@@ -2,101 +2,184 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>YouTube 自动生成视频字幕</title>
+    <title>YouTube 自动生成视频总结</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
     <style>
         .serif { font-family: 'Noto Serif SC', serif; }
-        .prose h1 { @apply text-4xl font-bold mb-10 border-b-8 border-black pb-4 text-center text-gray-900; }
-        .prose h2 { @apply text-2xl font-bold mt-12 mb-6 border-l-4 border-blue-600 pl-4 bg-gray-50 py-2 text-gray-800; }
-        .prose p { @apply text-lg leading-loose mb-6 text-gray-700 text-justify; }
-        .prose blockquote { @apply border-y-2 border-gray-100 py-8 my-10 italic text-xl text-gray-500 text-center px-4; }
-        .cursor-blink { display: inline-block; width: 3px; height: 1.2em; @apply bg-blue-500 ml-1; animation: blink 1s infinite; vertical-align: middle; }
-        @keyframes blink { 50% { opacity: 0; } }
+        
+        /* 强制指定样式，确保优先级高于 Tailwind Reset */
+        .prose h1 { 
+            display: block;
+            font-size: 2.25rem !important; /* 4xl */
+            line-height: 2.5rem !important;
+            font-weight: 700 !important;
+            margin-bottom: 2.5rem !important;
+            border-bottom: 8px solid black;
+            padding-bottom: 1rem;
+            text-align: center;
+            color: #111827;
+        }
+        
+        .prose h2 { 
+            display: block;
+            font-size: 1.5rem !important; /* 2xl */
+            line-height: 2rem !important;
+            font-weight: 700 !important;
+            margin-top: 3rem !important;
+            margin-bottom: 1.5rem !important;
+            border-left: 4px solid #2563eb;
+            padding-left: 1rem;
+            background-color: #f9fafb;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            color: #1f2937;
+        }
+
+        .prose h3 {
+            display: block;
+            font-size: 1.25rem !important;
+            font-weight: 600 !important;
+            margin-top: 1.5rem !important;
+            color: #374151;
+        }
+
+        .prose p { 
+            font-size: 1.125rem !important;
+            line-height: 2 !important;
+            margin-bottom: 1.5rem !important;
+            text-align: justify;
+            color: #374151;
+        }
+
+        .prose strong {
+            font-weight: bold;
+            color: #000;
+        }
     </style>
 </head>
 <body class="bg-zinc-50 min-h-screen p-4 md:p-16">
-    <div class="max-w-4xl mx-auto">
-        <div id="setup-panel" class="bg-white p-8 rounded-xl shadow-sm border mb-12">
-            <h2 class="text-2xl font-bold mb-6">全自动视频重构</h2>
-            <div class="space-y-4">
-                <input type="password" id="apiKey" placeholder="Gemini API Key" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
-                <input type="text" id="url" placeholder="YouTube URL" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
-                <button onclick="start()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition active:scale-95">开始生成</button>
-            </div>
-        </div>
-
-        <article id="output-wrapper" class="hidden bg-white p-10 md:p-20 shadow-xl rounded-sm">
+    <div class="max-w-4xl mx-auto flex flex-col gap-8">
+        
+        <article id="output-wrapper" class="hidden bg-white p-10 md:p-20 shadow-xl rounded-sm order-1">
             <div id="content" class="prose serif max-w-none"></div>
             <div id="loader" class="mt-10 text-blue-600 font-medium border-t pt-8">
                 <span class="cursor-blink"></span> <span id="status">正在同步字幕数据...</span>
             </div>
         </article>
+
+        <div id="setup-panel" class="bg-white p-8 rounded-xl shadow-sm border order-2">
+            <h2 id="setup-title" class="text-2xl font-bold mb-6">自动生成视频总结</h2>
+            <div class="space-y-4">
+                <input type="password" id="apiKey" placeholder="Gemini API Key" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
+                <input type="text" id="url" placeholder="YouTube URL" class="w-full p-4 border rounded-lg focus:ring-2 outline-none">
+                <button id="start-btn" onclick="start()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition active:scale-95">开始生成</button>
+            </div>
+        </div>
+        
     </div>
 
     <script>
         async function start() {
             const apiKey = document.getElementById('apiKey').value;
-            const url = document.getElementById('url').value;
+            const urlInput = document.getElementById('url');
+            const url = urlInput.value;
             const content = document.getElementById('content');
-            const setup = document.getElementById('setup-panel');
             const wrapper = document.getElementById('output-wrapper');
             const status = document.getElementById('status');
+            const startBtn = document.getElementById('start-btn');
+            const setupTitle = document.getElementById('setup-title');
+            const loader = document.getElementById('loader');
 
             if (!apiKey || !url) return alert('请填写完整信息');
 
-            setup.style.display = 'none';
+            // --- 状态初始化 ---
+            startBtn.disabled = true;
+            startBtn.innerText = '正在处理中...';
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            status.innerText = '正在同步字幕数据...';
+            status.classList.remove('text-red-600');
+            loader.classList.remove('hidden');
             wrapper.classList.remove('hidden');
-            content.innerHTML = '';
+            // 如果是第二次生成，清空旧内容，保留 key 但可以清空 url 方便输入新的
+            content.innerHTML = ''; 
 
-            const response = await fetch('/api/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey, url })
-            });
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey, url })
+                });
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = ""; // 缓冲区
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let fullRawText = "";
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    let parts = buffer.split('\n\n');
+                    buffer = parts.pop();
 
-                buffer += decoder.decode(value, { stream: true });
-
-                // 按 SSE 规范的双换行符分割
-                let parts = buffer.split('\n\n');
-                buffer = parts.pop(); // 最后一个可能是不完整的，留给下一轮
-
-                for (let part of parts) {
-                    if (part.startsWith('data: ')) {
-                        const dataString = part.replace('data: ', '').trim();
-                        // 1. 明确处理结束信号
-                        if (dataString === '[DONE]') {
-                            document.getElementById('loader').classList.add('hidden');
-                            return;
-                        }
-                        
-                        try {
-                            const json = JSON.parse(dataString);
-                            if (json.text) {
-                                // 逐字追加到页面上，实现流式效果
-                                document.getElementById('content').innerHTML += json.text;
-
-                                // 自动滚动到最下方
-                                // window.scrollTo(0, document.body.scrollHeight);
+                    for (let part of parts) {
+                        if (part.startsWith('data: ')) {
+                            const dataString = part.replace('data: ', '').trim();
+                            
+                            if (dataString === '[DONE]') {
+                                loader.classList.add('hidden');
+                                finishState(); // 成功结束
+                                return;
                             }
-                        } catch (e) {
-                            // 如果解析失败，说明这个数据包还没传完，塞回 buffer
-                            console.error("JSON 解析失败:", e, "数据内容:", dataString);
-                            buffer = part + '\n\n' + buffer;
+                            
+                            try {
+                                const json = JSON.parse(dataString);
+                                if (json.text) {
+                                    fullRawText += json.text;
+                                    // 使用你之前调试好的清洗逻辑和渲染逻辑
+                                    let cleanMarkdown = fullRawText
+                                        .replace(/^好的[，,。]*/, '')
+                                        .replace(/^(以下是|这是).*?[:：]\n*/, '')
+                                        .trimStart();
+                                    content.innerHTML = marked.parse(cleanMarkdown);
+                                } 
+                                else if (json.error) {
+                                    showError(json.error);
+                                    return;
+                                }
+                            } catch (e) {
+                                buffer = part + '\n\n' + buffer;
+                            }
                         }
                     }
                 }
+            } catch (err) {
+                showError("网络连接失败或服务器异常");
             }
-            document.getElementById('loader').classList.add('hidden');
+
+            // --- 辅助功能函数 ---
+
+            function finishState() {
+                startBtn.disabled = false;
+                startBtn.innerText = '生成另一个视频'; // 修改按钮文字
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                setupTitle.innerText = '继续重构新视频';
+                urlInput.value = ''; // 正常结束后清空 URL 框，方便输入下一个
+                urlInput.focus();
+            }
+
+            function showError(msg) {
+                status.innerText = `错误: ${msg}`;
+                status.classList.add('text-red-600');
+                startBtn.disabled = false;
+                startBtn.innerText = '重新生成'; // 报错时文字改为重新生成
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                document.querySelector('.cursor-blink').style.display = 'none';
+            }
         }
     </script>
 </body>
